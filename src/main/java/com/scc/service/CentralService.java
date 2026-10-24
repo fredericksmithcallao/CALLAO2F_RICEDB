@@ -31,12 +31,23 @@ import java.util.function.Supplier;
  */
 public class CentralService {
 
-    private final UserDao userDao = new UserDao();
-    private final RiceBatchDao batchDao = new RiceBatchDao();
-    private final StockRequestDao requestDao = new StockRequestDao();
-    private final DeliveryJobDao jobDao = new DeliveryJobDao();
-    private final BranchStockDao branchDao = new BranchStockDao();
-    private final ActivityLogDao logDao = new ActivityLogDao();
+    private final UserDao userDao;
+    private final RiceBatchDao batchDao;
+    private final StockRequestDao requestDao;
+    private final DeliveryJobDao jobDao;
+    private final BranchStockDao branchDao;
+    private final ActivityLogDao logDao;
+
+    /** DAOs are created once in Main and shared, so nothing is instantiated twice. */
+    public CentralService(UserDao userDao, RiceBatchDao batchDao, StockRequestDao requestDao,
+                          DeliveryJobDao jobDao, BranchStockDao branchDao, ActivityLogDao logDao) {
+        this.userDao = userDao;
+        this.batchDao = batchDao;
+        this.requestDao = requestDao;
+        this.jobDao = jobDao;
+        this.branchDao = branchDao;
+        this.logDao = logDao;
+    }
 
     /* ---------------------------- TRANSACTION HELPERS ---------------------------- */
 
@@ -90,6 +101,17 @@ public class CentralService {
         txRun(() -> {
             userDao.updateStatus(targetUsername, status);
             logDao.insert(actor, "ACCOUNT_" + status, "Account '" + targetUsername + "' set to " + status + ".");
+        });
+    }
+
+    /** Approves a pending account by its user ID (UserDao.approveUser) and records it in the activity log. */
+    public boolean approveUser(String actor, int userId) {
+        return tx(() -> {
+            boolean updated = userDao.approveUser(userId);
+            if (updated) {
+                logDao.insert(actor, "ACCOUNT_APPROVED", "Account with ID " + userId + " was approved.");
+            }
+            return updated;
         });
     }
 

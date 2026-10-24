@@ -1,6 +1,7 @@
 package com.scc.ui;
 
 import com.scc.dao.DatabaseException;
+import com.scc.dao.UserDao;
 import com.scc.model.RiceBatch;
 import com.scc.model.StockRequest;
 import com.scc.model.User;
@@ -11,10 +12,12 @@ import java.util.List;
 public class WarehouseMenu {
 
     private final CentralService service;
+    private final UserDao userDao;   // shared instance from Main
     private final ConsoleInput in;
 
-    public WarehouseMenu(CentralService service, ConsoleInput in) {
+    public WarehouseMenu(CentralService service, UserDao userDao, ConsoleInput in) {
         this.service = service;
+        this.userDao = userDao;
         this.in = in;
     }
 

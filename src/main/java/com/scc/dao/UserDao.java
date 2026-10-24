@@ -45,6 +45,21 @@ public class UserDao extends BaseDao {
                 UserDao::map, status.name());
     }
 
+    /** Returns every registered account, regardless of role or status. */
+    public List<User> getAllUsers() {
+        return query("SELECT " + COLUMNS + " FROM users ORDER BY id", UserDao::map);
+    }
+
+    /** Returns every account whose status is 'PENDING', across all user roles. */
+    public List<User> getPendingUsers() {
+        return query("SELECT " + COLUMNS + " FROM users WHERE status = 'PENDING' ORDER BY id", UserDao::map);
+    }
+
+    /** Sets a user's status from 'PENDING' to 'APPROVED'. Returns true if a row was updated. */
+    public boolean approveUser(int userId) {
+        return updateRows("UPDATE users SET status = 'APPROVED' WHERE id = ?", userId) > 0;
+    }
+
     public void updateStatus(String username, AccountStatus status) {
         updateRows("UPDATE users SET status = ? WHERE username = ?", status.name(), username);
     }
