@@ -115,6 +115,18 @@ public class CentralService {
         });
     }
 
+    /** Updates a user's role + status (UserDao.updateUserRoleAndStatus) and records it in the activity log. */
+    public boolean updateUserRoleAndStatus(String actor, int userId, String newRole, String newStatus) {
+        return tx(() -> {
+            boolean updated = userDao.updateUserRoleAndStatus(userId, newRole, newStatus);
+            if (updated) {
+                logDao.insert(actor, "ACCOUNT_UPDATED", "User ID " + userId + " set to role "
+                        + newRole.toUpperCase() + ", status " + newStatus.toUpperCase() + ".");
+            }
+            return updated;
+        });
+    }
+
     public void deleteUser(String actor, String targetUsername) {
         txRun(() -> {
             logDao.insert(actor, "ACCOUNT_DELETED", "Account '" + targetUsername + "' was deleted.");

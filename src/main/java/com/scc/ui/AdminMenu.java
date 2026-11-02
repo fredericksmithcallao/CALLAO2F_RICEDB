@@ -36,8 +36,9 @@ public class AdminMenu {
             System.out.println("5. Reject Pending Account");
             System.out.println("6. Approve/Reject Stock Transfer Requests");
             System.out.println("7. Manage Accounts (view / block / unblock / delete)");
-            System.out.println("8. View Activity Log");
-            System.out.println("9. Logout");
+            System.out.println("8. Update User Role & Status");
+            System.out.println("9. View Activity Log");
+            System.out.println("10. Logout");
             String choice = in.readLine("Choose an option: ");
 
             try {
@@ -49,8 +50,9 @@ public class AdminMenu {
                     case "5" -> rejectPendingAccount(admin);
                     case "6" -> handleStockRequests(admin);
                     case "7" -> manageAccounts(admin);
-                    case "8" -> showActivityLog();
-                    case "9" -> {
+                    case "8" -> updateUserRoleAndStatus(admin);
+                    case "9" -> showActivityLog();
+                    case "10" -> {
                         loggedIn = false;
                         System.out.println("Logged out.");
                     }
@@ -162,6 +164,98 @@ public class AdminMenu {
                 if (u.id() == id) return u;
             }
             System.out.println("ID " + id + " is not in the pending list. Try again (0 to cancel).");
+        }
+    }
+
+    /* ---------------------------- UPDATE ROLE & STATUS ---------------------------- */
+
+    private void updateUserRoleAndStatus(User admin) {
+        List<User> users = userDao.getAllUsers();
+        System.out.println("\n-- Update User Role & Status --");
+        printUserTable(users);
+
+        // 1. target User ID (0 cancels)
+        int targetId = readIntInput("Enter the User ID to update (0 to cancel): ");
+        if (targetId == 0) {
+            System.out.println("Update cancelled.");
+            return;
+        }
+
+        // Security rule: an admin may not modify the account they are logged in with
+        if (targetId == admin.id()) {
+            System.out.println("WARNING: Modifying the currently active admin account is restricted.");
+            return;
+        }
+
+        User target = null;
+        for (User u : users) {
+            if (u.id() == targetId) target = u;
+        }
+        if (target == null) {
+            System.out.println("No user found with ID " + targetId + ".");
+            return;
+        }
+
+        // 2. new role (0 cancels)
+        String newRole = readValidRole();
+        if (newRole == null) {
+            System.out.println("Update cancelled.");
+            return;
+        }
+        // a Store Manager must belong to a branch, which this screen cannot assign
+        if (newRole.equals(Role.STORE_MANAGER.name()) && target.branchName() == null) {
+            System.out.println("Cannot make " + target.username() + " a STORE_MANAGER: no branch is assigned to this account.");
+            return;
+        }
+
+        // 3. new status (0 cancels)
+        String newStatus = readValidStatus();
+        if (newStatus == null) {
+            System.out.println("Update cancelled.");
+            return;
+        }
+
+        if (service.updateUserRoleAndStatus(admin.username(), targetId, newRole, newStatus)) {
+            System.out.println("Success! " + target.username() + " is now " + newRole + " / " + newStatus + ".");
+        } else {
+            System.out.println("Could not update that account.");
+        }
+    }
+
+    /* ---------------------------- INPUT VALIDATION WRAPPERS ---------------------------- */
+
+    /** Keeps asking until the input is a whole number, so letters/symbols can never crash the app. */
+    private int readIntInput(String prompt) {
+        while (true) {
+            String input = in.readLine(prompt);
+            try {
+                return Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a whole number.");
+            }
+        }
+    }
+
+    /** Keeps asking until a valid role is typed. Returns the role in UPPER CASE, or null if the admin enters 0. */
+    private String readValidRole() {
+        while (true) {
+            String input = in.readLine("Enter new role (WAREHOUSE_STAFF, DELIVERY_DRIVER, STORE_MANAGER, SUPER_ADMIN, 0 to cancel): ")
+                    .toUpperCase();
+            if (input.equals("0")) return null;
+            for (Role r : Role.values()) {
+                if (r.name().equals(input)) return r.name();
+            }
+            System.out.println("Invalid role. Please choose one from the list.");
+        }
+    }
+
+    /** Keeps asking until APPROVED or PENDING is typed. Returns it in UPPER CASE, or null if the admin enters 0. */
+    private String readValidStatus() {
+        while (true) {
+            String input = in.readLine("Enter new status (APPROVED, PENDING, 0 to cancel): ").toUpperCase();
+            if (input.equals("0")) return null;
+            if (input.equals("APPROVED") || input.equals("PENDING")) return input;
+            System.out.println("Invalid status. Please enter APPROVED or PENDING.");
         }
     }
 

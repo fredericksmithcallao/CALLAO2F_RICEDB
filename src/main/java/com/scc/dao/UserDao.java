@@ -60,6 +60,16 @@ public class UserDao extends BaseDao {
         return updateRows("UPDATE users SET status = 'APPROVED' WHERE id = ?", userId) > 0;
     }
 
+    /**
+     * Changes a user's role and account status in one statement. Both values are converted to
+     * upper case first so they always match the stored enum names. Returns true if a row was updated.
+     * (The table column is "role", not "roles".)
+     */
+    public boolean updateUserRoleAndStatus(int userId, String newRole, String newStatus) {
+        return updateRows("UPDATE users SET role = ?, status = ? WHERE id = ?",
+                newRole.toUpperCase(), newStatus.toUpperCase(), userId) > 0;
+    }
+
     public void updateStatus(String username, AccountStatus status) {
         updateRows("UPDATE users SET status = ? WHERE username = ?", status.name(), username);
     }
