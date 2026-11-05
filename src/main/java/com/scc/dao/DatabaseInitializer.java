@@ -1,6 +1,7 @@
 package com.scc.dao;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -73,18 +74,45 @@ public class DatabaseInitializer {
                     FOREIGN KEY (assignedDriver)  REFERENCES users(username) ON DELETE SET NULL
                 )""");
 
-            st.execute("""
-                CREATE TABLE IF NOT EXISTS activity_logs (
-                    log_id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username      TEXT COLLATE NOCASE,
-                    action        TEXT NOT NULL,
-                    description   TEXT NOT NULL,
-                    log_timestamp TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-                    FOREIGN KEY (username) REFERENCES users(username) ON DELETE SET NULL
-                )""");
+            createActivityLogsTable(st);
 
         } catch (SQLException e) {
             throw new DatabaseException("Could not create database tables", e);
+        }
+    }
+
+    /**
+     * activity_logs stores WHO (user_id) did WHAT (action_type) and WHEN (timestamp).
+     * Databases made by an older version of this program (username / action / log_timestamp columns)
+     * are upgraded automatically and their old entries are kept.
+     */
+    private void createActivityLogsTable(Statement st) throws SQLException {
+        boolean oldLayout = false;
+        try (ResultSet rs = st.executeQuery("PRAGMA table_info(activity_logs)")) {
+            while (rs.next()) {
+                if ("username".equalsIgnoreCase(rs.getString("name"))) oldLayout = true;
+            }
+        }
+        if (oldLayout) {
+            st.execute("ALTER TABLE activity_logs RENAME TO activity_logs_old");
+        }
+
+        st.execute("""
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                log_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER,
+                action_type TEXT NOT NULL,
+                description TEXT NOT NULL,
+                timestamp   TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            )""");
+
+        if (oldLayout) {
+            st.execute("""
+                INSERT INTO activity_logs (log_id, user_id, action_type, description, timestamp)
+                SELECT o.log_id, u.id, o.action, o.description, o.log_timestamp
+                FROM activity_logs_old o LEFT JOIN users u ON u.username = o.username""");
+            st.execute("DROP TABLE activity_logs_old");
         }
     }
 

@@ -11,6 +11,7 @@ import com.scc.model.StockRequest;
 import com.scc.model.User;
 import com.scc.service.CentralService;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class AdminMenu {
@@ -37,7 +38,7 @@ public class AdminMenu {
             System.out.println("6. Approve/Reject Stock Transfer Requests");
             System.out.println("7. Manage Accounts (view / block / unblock / delete)");
             System.out.println("8. Update User Role & Status");
-            System.out.println("9. View Activity Log");
+            System.out.println("9. View System Audit Logs");
             System.out.println("10. Logout");
             String choice = in.readLine("Choose an option: ");
 
@@ -51,7 +52,7 @@ public class AdminMenu {
                     case "6" -> handleStockRequests(admin);
                     case "7" -> manageAccounts(admin);
                     case "8" -> updateUserRoleAndStatus(admin);
-                    case "9" -> showActivityLog();
+                    case "9" -> auditLogMenu(admin);
                     case "10" -> {
                         loggedIn = false;
                         System.out.println("Logged out.");
@@ -342,13 +343,94 @@ public class AdminMenu {
         }
     }
 
-    private void showActivityLog() {
-        List<ActivityLog> logs = service.getActivityLogs();
-        System.out.println("\n-- Activity Log (newest first) --");
-        if (logs.isEmpty()) {
-            System.out.println("No activity recorded yet.");
+    /* ---------------------------- SYSTEM AUDIT LOGS ---------------------------- */
+
+    private void auditLogMenu(User admin) {
+        boolean back = false;
+        while (!back) {
+            System.out.println("\n-- SYSTEM AUDIT LOGS --");
+            System.out.println("1. View All System Logs");
+            System.out.println("2. Filter Logs by User ID");
+            System.out.println("3. Clear All Logs");
+            System.out.println("0. Back");
+            String choice = in.readLine("Choose an option: ");
+
+            switch (choice) {
+                case "1" -> {
+                    List<ActivityLog> logs = service.getAllLogs();
+                    System.out.println("\n-- All System Logs (newest first) --");
+                    printLogTable(logs);
+                }
+                case "2" -> {
+                    int userId = readIntInput("Enter the User ID to filter by (0 to cancel): ");
+                    if (userId == 0) {
+                        System.out.println("Filter cancelled.");
+                    } else {
+                        System.out.println("\n-- Logs for User ID " + userId + " --");
+                        printLogTable(service.getLogsByUserId(userId));
+                    }
+                }
+                case "3" -> clearLogs(admin);
+                case "0" -> back = true;
+                default -> System.out.println("Invalid option.");
+            }
+        }
+    }
+
+    /** Clearing is permanent, so the admin has to type YES. The clearing itself is logged afterwards. */
+    private void clearLogs(User admin) {
+        String answer = in.readLine("This permanently deletes ALL log entries. Type YES to confirm (anything else cancels): ");
+        if (!answer.equals("YES")) {
+            System.out.println("Clear cancelled. Nothing was deleted.");
             return;
         }
-        for (ActivityLog l : logs) System.out.println("  " + l);
+        int removed = service.clearLogs(admin.username());
+        System.out.println("Done. " + removed + " log entries were cleared.");
+    }
+
+    /** Aligned log table: Log ID | User ID | Action Type | Description | Timestamp. Long descriptions wrap. */
+    private void printLogTable(List<ActivityLog> logs) {
+        if (logs.isEmpty()) {
+            System.out.println("No logs found.");
+            return;
+        }
+        String border = "+" + "-".repeat(7) + "+" + "-".repeat(10) + "+" + "-".repeat(20) + "+"
+                + "-".repeat(37) + "+" + "-".repeat(22) + "+";
+        String row = "| %-5s | %-8s | %-18s | %-35s | %-20s |%n";
+
+        System.out.println(border);
+        System.out.printf(row, "ID", "User ID", "Action Type", "Description", "Timestamp");
+        System.out.println(border);
+        for (ActivityLog l : logs) {
+            List<String> lines = wrap(l.description(), 35);
+            System.out.printf(row, l.logId(), l.userId() == null ? "-" : l.userId(),
+                    cut(l.actionType(), 18), lines.get(0), l.timestamp());
+            for (int i = 1; i < lines.size(); i++) {
+                System.out.printf(row, "", "", "", lines.get(i), "");
+            }
+        }
+        System.out.println(border);
+        System.out.println("Total: " + logs.size());
+    }
+
+    /** Splits text into lines of at most 'width' characters, breaking at spaces. */
+    private List<String> wrap(String text, int width) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        for (String word : text.split(" ")) {
+            while (word.length() > width) {
+                if (cur.length() > 0) { lines.add(cur.toString()); cur.setLength(0); }
+                lines.add(word.substring(0, width));
+                word = word.substring(width);
+            }
+            if (cur.length() > 0 && cur.length() + 1 + word.length() > width) {
+                lines.add(cur.toString());
+                cur.setLength(0);
+            }
+            if (cur.length() > 0) cur.append(' ');
+            cur.append(word);
+        }
+        if (cur.length() > 0 || lines.isEmpty()) lines.add(cur.toString());
+        return lines;
     }
 }

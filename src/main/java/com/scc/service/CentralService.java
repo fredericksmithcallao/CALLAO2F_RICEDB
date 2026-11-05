@@ -81,7 +81,7 @@ public class CentralService {
             }
             User created = userDao.insert(new User(0, username, password, fullName, role,
                     AccountStatus.PENDING, role == Role.STORE_MANAGER ? branchName : null));
-            logDao.insert(username, "ACCOUNT_REGISTERED", "New " + role + " account registered (PENDING).");
+            log(username, "USER_REGISTERED", "New " + role + " account registered (PENDING).");
             return created;
         });
     }
@@ -100,7 +100,7 @@ public class CentralService {
     public void setAccountStatus(String actor, String targetUsername, AccountStatus status) {
         txRun(() -> {
             userDao.updateStatus(targetUsername, status);
-            logDao.insert(actor, "ACCOUNT_" + status, "Account '" + targetUsername + "' set to " + status + ".");
+            log(actor, "USER_" + status, "Account '" + targetUsername + "' set to " + status + ".");
         });
     }
 
@@ -109,7 +109,7 @@ public class CentralService {
         return tx(() -> {
             boolean updated = userDao.approveUser(userId);
             if (updated) {
-                logDao.insert(actor, "ACCOUNT_APPROVED", "Account with ID " + userId + " was approved.");
+                log(actor, "USER_APPROVED", "Admin [" + idOf(actor) + "] approved account for User ID " + userId + ".");
             }
             return updated;
         });
@@ -120,7 +120,7 @@ public class CentralService {
         return tx(() -> {
             boolean updated = userDao.updateUserRoleAndStatus(userId, newRole, newStatus);
             if (updated) {
-                logDao.insert(actor, "ACCOUNT_UPDATED", "User ID " + userId + " set to role "
+                log(actor, "USER_UPDATED", "Admin [" + idOf(actor) + "] changed User " + userId + " to role "
                         + newRole.toUpperCase() + ", status " + newStatus.toUpperCase() + ".");
             }
             return updated;
@@ -129,7 +129,7 @@ public class CentralService {
 
     public void deleteUser(String actor, String targetUsername) {
         txRun(() -> {
-            logDao.insert(actor, "ACCOUNT_DELETED", "Account '" + targetUsername + "' was deleted.");
+            log(actor, "USER_DELETED", "Account '" + targetUsername + "' was deleted.");
             userDao.delete(targetUsername);
         });
     }
@@ -139,7 +139,7 @@ public class CentralService {
     public RiceBatch addRiceBatch(String actor, String supplier, int quantityKg) {
         return tx(() -> {
             RiceBatch batch = batchDao.insert(supplier, quantityKg);
-            logDao.insert(actor, "RICE_ARRIVAL", "Batch #" + batch.id() + " logged: " + quantityKg +
+            log(actor, "RICE_ARRIVAL", "Batch #" + batch.id() + " logged: " + quantityKg +
                     "kg from " + supplier + ".");
             return batch;
         });
@@ -166,7 +166,7 @@ public class CentralService {
                 // split off the damaged portion as its own record
                 batchDao.insertDamagedPortion(b.supplierName(), damagedQty, b.arrivalOrder());
             }
-            logDao.insert(actor, "DAMAGE_REPORTED", "Batch #" + batchId + ": " +
+            log(actor, "DAMAGE_REPORTED", "Batch #" + batchId + ": " +
                     Math.min(damagedQty, b.quantityKg()) + "kg reported damaged.");
             return true;
         });
@@ -193,7 +193,7 @@ public class CentralService {
     public StockRequest createRestockRequest(String actor, String branchName, int quantityKg) {
         return tx(() -> {
             StockRequest req = requestDao.insert(branchName, null, RequestType.RESTOCK, quantityKg);
-            logDao.insert(actor, "REQUEST_CREATED", "Restock request #" + req.id() + " for " +
+            log(actor, "REQUEST_CREATED", "Restock request #" + req.id() + " for " +
                     quantityKg + "kg by " + branchName + ".");
             return req;
         });
@@ -212,7 +212,7 @@ public class CentralService {
         }
         return tx(() -> {
             StockRequest req = requestDao.insert(requestingBranch, sourceBranch, RequestType.EXCHANGE, quantityKg);
-            logDao.insert(actor, "REQUEST_CREATED", "Exchange request #" + req.id() + " for " + quantityKg +
+            log(actor, "REQUEST_CREATED", "Exchange request #" + req.id() + " for " + quantityKg +
                     "kg: " + requestingBranch + " <- " + sourceBranch + ".");
             return req;
         });
@@ -256,7 +256,7 @@ public class CentralService {
             if (linked.type() == RequestType.EXCHANGE && linked.sourceBranch() != null) {
                 branchDao.addStock(linked.sourceBranch(), -job.quantityKg());
             }
-            logDao.insert(actor, "DELIVERY_COMPLETED", "Job #" + jobId + " received by " + branchName +
+            log(actor, "DELIVERY_COMPLETED", "Job #" + jobId + " received by " + branchName +
                     " (" + job.quantityKg() + "kg). Request #" + linked.id() + " COMPLETED.");
             return true;
         });
@@ -279,7 +279,7 @@ public class CentralService {
                 return null;
             }
             jobDao.assignDriver(jobId, driverUsername);
-            logDao.insert(driverUsername, "JOB_ACCEPTED", "Job #" + jobId + " accepted.");
+            log(driverUsername, "JOB_ACCEPTED", "Job #" + jobId + " accepted.");
             return jobDao.findById(jobId);
         });
     }
@@ -298,7 +298,7 @@ public class CentralService {
                 throw new IllegalArgumentException("Invalid status.");
             }
             jobDao.updateStatus(jobId, newStatus);
-            logDao.insert(driverUsername, "STATUS_CHANGED", "Job #" + jobId + " is now " + newStatus + ".");
+            log(driverUsername, "STATUS_CHANGED", "Job #" + jobId + " is now " + newStatus + ".");
         });
     }
 
@@ -309,7 +309,7 @@ public class CentralService {
                 throw new IllegalArgumentException("Job must be marked DELIVERED before capturing a signature.");
             }
             jobDao.setSignatureConfirmed(jobId, true);
-            logDao.insert(driverUsername, "SIGNATURE_CONFIRMED", "Receiver signature confirmed for Job #" + jobId + ".");
+            log(driverUsername, "SIGNATURE_SIGNED", "Receiver signature confirmed for Job #" + jobId + ".");
         });
     }
 
@@ -351,7 +351,7 @@ public class CentralService {
                 requestDao.updateStatus(requestId, RequestStatus.APPROVED);
                 jobDao.insert(requestId, req.sourceBranch(), req.requestingBranch(), req.quantityKg());
             }
-            logDao.insert(actor, "REQUEST_APPROVED", "Request #" + requestId + " approved; delivery job created.");
+            log(actor, "REQUEST_APPROVED", "Request #" + requestId + " approved; delivery job created.");
             return true;
         });
     }
@@ -363,12 +363,33 @@ public class CentralService {
                 return false;
             }
             requestDao.updateStatus(requestId, RequestStatus.REJECTED);
-            logDao.insert(actor, "REQUEST_REJECTED", "Request #" + requestId + " rejected.");
+            log(actor, "REQUEST_REJECTED", "Request #" + requestId + " rejected.");
             return true;
         });
     }
 
     /* ---------------------------- AUDIT LOG ---------------------------- */
 
-    public List<ActivityLog> getActivityLogs() { return logDao.findAll(); }
+    /** Records an action for the user with this username (looked up to get the user ID). */
+    private void log(String username, String actionType, String description) {
+        logDao.logAction(idOf(username), actionType, description);
+    }
+
+    private int idOf(String username) {
+        User u = userDao.findByUsername(username);
+        return u == null ? 0 : u.id();
+    }
+
+    public List<ActivityLog> getAllLogs() { return logDao.getAllLogs(); }
+
+    public List<ActivityLog> getLogsByUserId(int userId) { return logDao.getLogsByUserId(userId); }
+
+    /** Deletes all historical logs, then records who cleared them. Returns how many were removed. */
+    public int clearLogs(String actor) {
+        return tx(() -> {
+            int removed = logDao.clearLogs();
+            log(actor, "LOGS_CLEARED", "Admin [" + idOf(actor) + "] cleared " + removed + " log entries.");
+            return removed;
+        });
+    }
 }
